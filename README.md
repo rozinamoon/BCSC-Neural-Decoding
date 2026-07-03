@@ -4,8 +4,8 @@
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/yourname/your-repo.git
-cd your-repo
+git clone https://github.com/rozinamoon/BCSC-Neural-Decoding.git
+cd BCSC-Neural-Decoding
 ```
 
 ### 2. Create a virtual environment
