@@ -16,6 +16,11 @@ Each output NPZ stores:
     event_label          : event description per trial
     channel_names
     channel_types
+    channel_positions_xyz : electrode coordinates in metres, shape (channels, 3)
+    channel_loc           : complete MNE 12-value channel location vectors
+    channel_position_valid
+    channel_coordinate_frames
+    dig_*                 : digitisation/fiducial metadata when present
     sfreq
     times
     unit
@@ -169,6 +174,101 @@ def event_labels_from_epochs(
     return event_codes, event_labels, event_id_json
 
 
+def extract_spatial_metadata(
+    epochs: "mne.BaseEpochs",
+) -> tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    str,
+]:
+    """Extract channel coordinates and digitisation metadata from MNE Info.
+
+    MNE stores distances in metres.  The first three entries of each channel's
+    12-value ``loc`` vector are the channel XYZ coordinates.  A position is
+    treated as valid only when all three values are finite and the coordinate
+    is not the zero vector.
+    """
+    n_channels = len(epochs.ch_names)
+    channel_loc = np.full((n_channels, 12), np.nan, dtype=np.float64)
+    channel_coordinate_frames = np.full(n_channels, -1, dtype=np.int32)
+
+    for channel_index, channel_info in enumerate(epochs.info["chs"]):
+        loc = np.asarray(channel_info.get("loc", []), dtype=np.float64).ravel()
+        n_values = min(loc.size, 12)
+        if n_values:
+            channel_loc[channel_index, :n_values] = loc[:n_values]
+        channel_coordinate_frames[channel_index] = int(
+            channel_info.get("coord_frame", -1)
+        )
+
+    channel_positions_xyz = channel_loc[:, :3].copy()
+    channel_position_valid = (
+        np.all(np.isfinite(channel_positions_xyz), axis=1)
+        & (np.linalg.norm(channel_positions_xyz, axis=1) > 0.0)
+    )
+
+    dig_points = epochs.info.get("dig") or []
+    dig_r: list[np.ndarray] = []
+    dig_kind: list[int] = []
+    dig_ident: list[int] = []
+    dig_coordinate_frames: list[int] = []
+    dig_json_records: list[dict[str, object]] = []
+
+    for point in dig_points:
+        r = np.asarray(point["r"], dtype=np.float64).reshape(3)
+        kind = int(point["kind"])
+        ident = int(point["ident"])
+        coord_frame = int(point["coord_frame"])
+
+        dig_r.append(r)
+        dig_kind.append(kind)
+        dig_ident.append(ident)
+        dig_coordinate_frames.append(coord_frame)
+        dig_json_records.append(
+            {
+                "r_m": [float(value) for value in r],
+                "kind": kind,
+                "ident": ident,
+                "coord_frame": coord_frame,
+            }
+        )
+
+    if dig_r:
+        dig_r_array = np.vstack(dig_r).astype(np.float64, copy=False)
+    else:
+        dig_r_array = np.empty((0, 3), dtype=np.float64)
+
+    dig_kind_array = np.asarray(dig_kind, dtype=np.int32)
+    dig_ident_array = np.asarray(dig_ident, dtype=np.int32)
+    dig_coordinate_frames_array = np.asarray(
+        dig_coordinate_frames,
+        dtype=np.int32,
+    )
+    dig_points_json = json.dumps(
+        dig_json_records,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+    return (
+        channel_positions_xyz,
+        channel_loc,
+        channel_position_valid,
+        channel_coordinate_frames,
+        dig_r_array,
+        dig_kind_array,
+        dig_ident_array,
+        dig_coordinate_frames_array,
+        dig_points_json,
+    )
+
+
 def save_subject_condition_npz(
     output_path: Path,
     *,
@@ -180,6 +280,15 @@ def save_subject_condition_npz(
     event_id_json: str,
     channel_names: list[str],
     channel_types: list[str],
+    channel_positions_xyz: np.ndarray,
+    channel_loc: np.ndarray,
+    channel_position_valid: np.ndarray,
+    channel_coordinate_frames: np.ndarray,
+    dig_r: np.ndarray,
+    dig_kind: np.ndarray,
+    dig_ident: np.ndarray,
+    dig_coordinate_frames: np.ndarray,
+    dig_points_json: str,
     sfreq: float,
     times: np.ndarray,
     unit: str,
@@ -199,6 +308,28 @@ def save_subject_condition_npz(
         event_id_json=np.asarray(event_id_json),
         channel_names=np.asarray(channel_names, dtype=str),
         channel_types=np.asarray(channel_types, dtype=str),
+        channel_positions_xyz=np.asarray(
+            channel_positions_xyz,
+            dtype=np.float64,
+        ),
+        channel_positions_unit=np.asarray("m"),
+        channel_loc=np.asarray(channel_loc, dtype=np.float64),
+        channel_position_valid=np.asarray(
+            channel_position_valid,
+            dtype=bool,
+        ),
+        channel_coordinate_frames=np.asarray(
+            channel_coordinate_frames,
+            dtype=np.int32,
+        ),
+        dig_r=np.asarray(dig_r, dtype=np.float64),
+        dig_kind=np.asarray(dig_kind, dtype=np.int32),
+        dig_ident=np.asarray(dig_ident, dtype=np.int32),
+        dig_coordinate_frames=np.asarray(
+            dig_coordinate_frames,
+            dtype=np.int32,
+        ),
+        dig_points_json=np.asarray(dig_points_json),
         sfreq=np.asarray(sfreq, dtype=np.float64),
         times=np.asarray(times, dtype=np.float64),
         tmin=np.asarray(times[0], dtype=np.float64),
@@ -313,6 +444,15 @@ def main() -> int:
     combined_event_labels: list[np.ndarray] = []
     combined_epoch_indices: list[np.ndarray] = []
     combined_source_sets: list[np.ndarray] = []
+    combined_dataset_indices: list[np.ndarray] = []
+    combined_dataset_subjects: list[str] = []
+    combined_dataset_conditions: list[str] = []
+    combined_dataset_source_sets: list[str] = []
+    combined_dataset_channel_positions_xyz: list[np.ndarray] = []
+    combined_dataset_channel_loc: list[np.ndarray] = []
+    combined_dataset_channel_position_valid: list[np.ndarray] = []
+    combined_dataset_channel_coordinate_frames: list[np.ndarray] = []
+    combined_dataset_dig_points_json: list[str] = []
 
     reference_channels: list[str] | None = None
     reference_channel_types: list[str] | None = None
@@ -438,6 +578,17 @@ def main() -> int:
                 sfreq = float(epochs.info["sfreq"])
                 times = np.asarray(epochs.times, dtype=np.float64)
                 channel_types = list(epochs.get_channel_types())
+                (
+                    channel_positions_xyz,
+                    channel_loc,
+                    channel_position_valid,
+                    channel_coordinate_frames,
+                    dig_r,
+                    dig_kind,
+                    dig_ident,
+                    dig_coordinate_frames,
+                    dig_points_json,
+                ) = extract_spatial_metadata(epochs)
                 event_codes, event_labels, event_id_json = (
                     event_labels_from_epochs(epochs)
                 )
@@ -453,6 +604,15 @@ def main() -> int:
                     event_id_json=event_id_json,
                     channel_names=current_channels,
                     channel_types=channel_types,
+                    channel_positions_xyz=channel_positions_xyz,
+                    channel_loc=channel_loc,
+                    channel_position_valid=channel_position_valid,
+                    channel_coordinate_frames=channel_coordinate_frames,
+                    dig_r=dig_r,
+                    dig_kind=dig_kind,
+                    dig_ident=dig_ident,
+                    dig_coordinate_frames=dig_coordinate_frames,
+                    dig_points_json=dig_points_json,
                     sfreq=sfreq,
                     times=times,
                     unit=args.unit,
@@ -482,6 +642,7 @@ def main() -> int:
                         )
 
                     if is_compatible:
+                        dataset_index = len(combined_dataset_subjects)
                         combined_x.append(x)
                         combined_y.append(
                             np.full(
@@ -504,6 +665,25 @@ def main() -> int:
                         combined_source_sets.append(
                             np.full(n_trials, str(set_path), dtype=str)
                         )
+                        combined_dataset_indices.append(
+                            np.full(n_trials, dataset_index, dtype=np.int32)
+                        )
+                        combined_dataset_subjects.append(subject)
+                        combined_dataset_conditions.append(category.key)
+                        combined_dataset_source_sets.append(str(set_path))
+                        combined_dataset_channel_positions_xyz.append(
+                            channel_positions_xyz
+                        )
+                        combined_dataset_channel_loc.append(channel_loc)
+                        combined_dataset_channel_position_valid.append(
+                            channel_position_valid
+                        )
+                        combined_dataset_channel_coordinate_frames.append(
+                            channel_coordinate_frames
+                        )
+                        combined_dataset_dig_points_json.append(
+                            dig_points_json
+                        )
                         combined_trials += n_trials
                         included_in_combined = True
                     else:
@@ -518,9 +698,11 @@ def main() -> int:
                 if combined_message:
                     message += f"; combined exclusion: {combined_message}"
 
+                valid_position_count = int(channel_position_valid.sum())
                 print(
                     f"[DONE] {subject}: X={x.shape}, "
-                    f"sfreq={sfreq:g} Hz, NaN={n_nan}"
+                    f"sfreq={sfreq:g} Hz, NaN={n_nan}, "
+                    f"channel positions={valid_position_count}/{n_channels}"
                 )
 
                 summary_rows.append(
@@ -589,6 +771,43 @@ def main() -> int:
                 combined_source_sets,
                 axis=0,
             ),
+            dataset_index_per_trial=np.concatenate(
+                combined_dataset_indices,
+                axis=0,
+            ),
+            dataset_subjects=np.asarray(
+                combined_dataset_subjects,
+                dtype=str,
+            ),
+            dataset_conditions=np.asarray(
+                combined_dataset_conditions,
+                dtype=str,
+            ),
+            dataset_source_sets=np.asarray(
+                combined_dataset_source_sets,
+                dtype=str,
+            ),
+            dataset_channel_positions_xyz=np.stack(
+                combined_dataset_channel_positions_xyz,
+                axis=0,
+            ),
+            dataset_channel_loc=np.stack(
+                combined_dataset_channel_loc,
+                axis=0,
+            ),
+            dataset_channel_position_valid=np.stack(
+                combined_dataset_channel_position_valid,
+                axis=0,
+            ),
+            dataset_channel_coordinate_frames=np.stack(
+                combined_dataset_channel_coordinate_frames,
+                axis=0,
+            ),
+            dataset_dig_points_json=np.asarray(
+                combined_dataset_dig_points_json,
+                dtype=str,
+            ),
+            channel_positions_unit=np.asarray("m"),
             channel_names=np.asarray(reference_channels, dtype=str),
             channel_types=np.asarray(reference_channel_types, dtype=str),
             sfreq=np.asarray(reference_sfreq, dtype=np.float64),
