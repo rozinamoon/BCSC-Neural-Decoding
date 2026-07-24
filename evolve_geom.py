@@ -31,6 +31,8 @@ import jax.numpy as jnp
 import jax.random as jr
 from jax import lax, vmap, jit
 
+jax.config.update("jax_enable_x64", False)
+
 from search import run_cmaes, run_selection_only
 
 N, NT, TAU, KAP, DEC, CLIP, EMAX = 32, 10, 8, 1.0, 0.98, 10.0, 4.0
@@ -92,7 +94,7 @@ def roll_survive(flat: jnp.ndarray, p: jnp.ndarray, dup: bool = False) -> jnp.nd
             f = fired.astype(vv.dtype)
             return (v_n, u_n, f, sy_n), f
 
-        (v, u, sp, syn), all_sp = lax.scan(tick, (v, u, sp, syn), None, length=NT)
+        (v, u, sp, syn), all_sp = lax.scan(tick, (v, u, sp, syn), None, length=NT, unroll=NT)
         rate = jnp.mean(all_sp, axis=0)
         act = jnp.tanh(jnp.dot(w_out, rate)) * 2.0
         land = buf[0]

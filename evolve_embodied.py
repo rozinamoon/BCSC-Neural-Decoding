@@ -31,6 +31,8 @@ import jax
 import jax.numpy as jnp
 from jax import lax, vmap, jit
 
+jax.config.update("jax_enable_x64", False)
+
 from search import run_cmaes, run_selection_only
 
 N, NT, TAU, KAP, DEC, CLIP, EMAX = 32, 10, 8, 1.0, 0.98, 10.0, 4.0
@@ -101,7 +103,7 @@ def survive(flat, p, embodied=True, kreg=1, budget=1.0):
             f = fired.astype(vv.dtype)
             return (v_n, u_n, f, sy_n), f
 
-        (v, u, sp, syn), all_sp = lax.scan(tick, (v, u, sp, syn), None, length=NT)
+        (v, u, sp, syn), all_sp = lax.scan(tick, (v, u, sp, syn), None, length=NT, unroll=NT)
         rate = jnp.mean(all_sp, axis=0)
         g = jnp.tanh(w_out @ rate)
         a_r = g * (budget / jnp.maximum(1.0, jnp.linalg.norm(g)))
