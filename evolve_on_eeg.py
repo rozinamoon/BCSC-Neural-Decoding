@@ -93,25 +93,40 @@ mean_survival = jit(lambda flat, P: jnp.mean(vmap(lambda p: roll_survive(flat, p
 pop_survival = jit(lambda POP, P: vmap(lambda f: mean_survival(f, P))(POP))
 
 
-def eeg_perturbations(data_dir: str, n_ep: int, length: int, seed: int) -> jnp.ndarray:
-    files = sorted(glob.glob(os.path.join(data_dir, "sub-S*_ses-02.npz")))
-    files = [f for f in files if np.load(f, allow_pickle=True)["X"].shape[1] == 61]
+def eeg_perturbations(data_dir: str, n_ep: int, length: int, seed: int,
+                      pstream: str | None = None) -> jnp.ndarray:
     rng = np.random.default_rng(seed)
-    segs = []
-    for f in files:
-        d = np.load(f, allow_pickle=True)
-        X, t = d["X"].astype(float), d["times"]
-        meta = pd.DataFrame({c: [str(v) for v in d[c]] for c in ["task", "tms_target"]})
-        k = ((meta.task == "single-phoneme") & meta.tms_target.str.startswith("control")).values
-        wm = (t >= 0.0) & (t <= 0.5)
-        Xk = X[k][:, :, wm]
-        flat = Xk.transpose(0, 2, 1).reshape(-1, Xk.shape[1])
-        flat = flat - flat.mean(0)
-        _, _, Vt = np.linalg.svd(flat, full_matrices=False)
-        pc1 = np.einsum("c,nct->nt", Vt[0], Xk)
-        segs.append(pc1.reshape(-1))
-    stream = np.concatenate(segs)
+    if pstream:
+        if not os.path.exists(pstream):
+            raise SystemExit("pstream file not found: %s (run extract_pstream.py)" % pstream)
+        stream = np.load(pstream).astype(np.float64)
+    else:
+        files = sorted(glob.glob(os.path.join(data_dir, "sub-S*_ses-02.npz")))
+        files = [f for f in files if np.load(f, allow_pickle=True)["X"].shape[1] == 61]
+        if not files:
+            raise SystemExit(
+                "no EEG npz in '%s'. Either copy the data there, or build a compact "
+                "perturbation stream locally with:\n"
+                "    python extract_pstream.py --data npz --out pstream.npy\n"
+                "then run with --pstream pstream.npy" % data_dir)
+        segs = []
+        for f in files:
+            d = np.load(f, allow_pickle=True)
+            X, t = d["X"].astype(float), d["times"]
+            meta = pd.DataFrame({c: [str(v) for v in d[c]]
+                                 for c in ["task", "tms_target"]})
+            k = ((meta.task == "single-phoneme")
+                 & meta.tms_target.str.startswith("control")).values
+            wm = (t >= 0.0) & (t <= 0.5)
+            Xk = X[k][:, :, wm]
+            flat = Xk.transpose(0, 2, 1).reshape(-1, Xk.shape[1])
+            flat = flat - flat.mean(0)
+            _, _, Vt = np.linalg.svd(flat, full_matrices=False)
+            segs.append(np.einsum("c,nct->nt", Vt[0], Xk).reshape(-1))
+        stream = np.concatenate(segs)
     stream = stream / (stream.std() + 1e-9) * P_STD
+    if len(stream) <= length + 1:
+        raise SystemExit("stream too short (%d) for length %d" % (len(stream), length))
     starts = rng.integers(0, len(stream) - length - 1, size=n_ep)
     return jnp.asarray(np.stack([stream[s:s + length] for s in starts]), dtype=jnp.float32)
 
@@ -124,8 +139,8 @@ def tournament(key, fit, n_sel, k, pop):
 def evolve(args) -> None:
     key = jr.PRNGKey(args.seed)
     k1, k2, key = jr.split(key, 3)
-    Ptrain = eeg_perturbations(args.data, args.eps, args.length, args.seed)
-    Ptest = eeg_perturbations(args.data, 64, args.length, args.seed + 10_000)
+    Ptrain = eeg_perturbations(args.data, args.eps, args.length, args.seed, args.pstream)
+    Ptest = eeg_perturbations(args.data, 64, args.length, args.seed + 10_000, args.pstream)
     print("perturbations: train %s  test %s  std %.3f" % (
         Ptrain.shape, Ptest.shape, float(jnp.std(Ptrain))), flush=True)
 
@@ -159,6 +174,7 @@ def evolve(args) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="npz")
+    ap.add_argument("--pstream", default=None)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--gens", type=int, default=400)
     ap.add_argument("--pop", type=int, default=256)
