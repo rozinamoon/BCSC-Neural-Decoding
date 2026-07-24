@@ -29,6 +29,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from pyriemann.estimation import Covariances
 from pyriemann.tangentspace import TangentSpace
+from pyriemann.utils.mean import mean_riemann
 
 N, NT, TAU, KAP, DEC, CLIP, EMAX = 32, 10, 8, 1.0, 0.98, 10.0, 4.0
 DT_IZH, V_THRESH, I_TONIC, INPUT_SCALE, SYN_DECAY = 0.5, 30.0, 2.95, 30.0, 0.8
@@ -106,9 +107,35 @@ def load(f):
     return (Xk - Xk[:, :, bm].mean(2, keepdims=True))[:, :, wm], meta.phoneme.values[k]
 
 
-def scalar_obs(X):
-    pc = PCA(1).fit(X.transpose(0, 2, 1).reshape(-1, X.shape[1]))
-    U = np.stack([pc.transform(z.T) for z in X], 0)[:, :, 0]
+WIN, NPCA_COV = 50, 10
+
+
+def scalar_obs(X, mode="geom"):
+    """mode='pc1'  : first principal component of the raw signal
+       mode='geom' : sliding-window covariance -> tangent space at the Karcher mean -> PC1
+                     (unsupervised; matches evolve_geom.py with STRIDE=1)"""
+    if mode == "pc1":
+        pc = PCA(1).fit(X.transpose(0, 2, 1).reshape(-1, X.shape[1]))
+        U = np.stack([pc.transform(z.T) for z in X], 0)[:, :, 0]
+        return (U / (U.std() + 1e-9) * P_STD).astype(np.float32)
+    pc = PCA(NPCA_COV).fit(X.transpose(0, 2, 1).reshape(-1, X.shape[1]))
+    Z = np.stack([pc.transform(z.T).T for z in X], 0)
+    T = Z.shape[2]
+    starts = range(0, T - WIN + 1)
+    C = np.stack([np.einsum("nkt,nlt->nkl", Z[:, :, s:s + WIN], Z[:, :, s:s + WIN]) / WIN
+                  for s in starts], 1)
+    d = C.shape[-1]
+    C = C + 1e-6 * np.trace(C, axis1=-2, axis2=-1)[..., None, None] / d * np.eye(d)
+    flat = C.reshape(-1, d, d)
+    M = mean_riemann(flat[::37])
+    ts = TangentSpace(metric="riemann")
+    ts.reference_ = M
+    ts.metric = "riemann"
+    V = ts.fit_transform(flat) if not hasattr(ts, "reference_") else None
+    from pyriemann.utils.tangentspace import tangent_space as _tsf
+    V = _tsf(flat, M).reshape(C.shape[0], C.shape[1], -1)
+    p1 = PCA(1).fit(V.reshape(-1, V.shape[2]))
+    U = np.stack([p1.transform(v)[:, 0] for v in V], 0)
     return (U / (U.std() + 1e-9) * P_STD).astype(np.float32)
 
 
@@ -141,6 +168,9 @@ def main(args):
     P_ = {"evolved": np.load(args.params).astype(np.float32)}
     if args.compare and os.path.exists(args.compare):
         P_["old"] = np.load(args.compare).astype(np.float32)
+    for e_ in args.extra:
+        if os.path.exists(e_):
+            P_[os.path.basename(e_).replace(".npy", "")] = np.load(e_).astype(np.float32)
     rng = np.random.default_rng(0)
     P_["shuffled"] = rng.permutation(P_["evolved"])
     print("params: %s" % {k: "|mean| %.3f" % np.abs(v).mean() for k, v in P_.items()})
@@ -160,7 +190,7 @@ def main(args):
                  "ph11": (Xall[np.isin(ph, PHON)],
                           np.array([PHON.index(v) for v in ph[np.isin(ph, PHON)]]), 6)}
         for tn, (X, y, K) in tasks.items():
-            P = scalar_obs(X)
+            P = scalar_obs(X, args.obs)
             F = {}
             for t in tags:
                 F[t], R, E = features(P, P_[t])
@@ -210,4 +240,6 @@ if __name__ == "__main__":
     ap.add_argument("--params", required=True)
     ap.add_argument("--compare", default=None)
     ap.add_argument("--data", default="npz")
+    ap.add_argument("--obs", choices=["geom", "pc1"], default="geom")
+    ap.add_argument("--extra", nargs="*", default=[])
     main(ap.parse_args())
