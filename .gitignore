@@ -14,3 +14,6 @@ __pycache__/
 .ipynb_checkpoints/
 EEG_Data_Processing_ses02_npz*/
 .DS_Store
+result_eeg/
+results_eeg/
+log_*.txt
