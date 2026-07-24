@@ -37,6 +37,7 @@ N, NT, TAU, KAP, DEC, CLIP, EMAX = 32, 10, 8, 1.0, 0.98, 10.0, 4.0
 DT_IZH, V_THRESH, I_TONIC, INPUT_SCALE, SYN_DECAY = 0.5, 30.0, 2.95, 30.0, 0.8
 P_STD = 0.3
 V_SCALE, Q_BOUND, SHELTER_W = 0.30, 6.0, 1.2
+KREG_G = [1]
 ENV_TAU = 150.0
 
 
@@ -44,17 +45,18 @@ def n_params(n=N):
     return n * n + 7 * n
 
 
-def n_params_embodied(n=N):
-    return n_params(n) + n
+def n_params_embodied(n=N, kreg=1):
+    return n * n + (6 + kreg) * n + n
 
 
-def split_genome(flat, n=N):
+def split_genome(flat, n=N, kreg=1):
     i = 0
     W = flat[i:i+n*n].reshape(n, n); i += n*n
     b = flat[i:i+n]; i += n
     ns = n // 4
     w_in = flat[i:i+n] * jnp.zeros(n).at[:ns].set(1.0); i += n
-    w_out = flat[i:i+n] * jnp.zeros(n).at[-ns:].set(1.0); i += n
+    out_mask = jnp.zeros(n).at[-ns:].set(1.0)
+    w_out = flat[i:i+kreg*n].reshape(kreg, n) * out_mask; i += kreg*n
     a = flat[i:i+n]; i += n
     bp = flat[i:i+n]; i += n
     c = flat[i:i+n]; i += n
@@ -75,8 +77,8 @@ def expand_obs(e_vec, n=N):
     return jnp.concatenate([jnp.concatenate(parts), jnp.zeros(n - ns)])
 
 
-def survive(flat, p, embodied=True):
-    W, b, w_in, w_out, a, bp, c, d, w_e = split_genome(flat)
+def survive(flat, p, embodied=True, kreg=1, budget=1.0):
+    W, b, w_in, w_out, a, bp, c, d, w_e = split_genome(flat, N, kreg)
     k = p.shape[1]
     centres = jnp.arange(k, dtype=jnp.float32) - (k - 1) / 2.0
 
@@ -101,28 +103,30 @@ def survive(flat, p, embodied=True):
 
         (v, u, sp, syn), all_sp = lax.scan(tick, (v, u, sp, syn), None, length=NT)
         rate = jnp.mean(all_sp, axis=0)
-        a_r = jnp.tanh(jnp.dot(w_out, rate)) * 2.0
+        g = jnp.tanh(w_out @ rate)
+        a_r = g * (budget / jnp.maximum(1.0, jnp.linalg.norm(g)))
         a_e = jnp.tanh(jnp.dot(w_e, rate)) * 2.0
         land_r, land_e = buf_r[0], buf_e[0]
-        buf_r = jnp.roll(buf_r, -1).at[-1].set(a_r)
+        buf_r = jnp.roll(buf_r, -1, axis=0).at[-1].set(a_r)
         buf_e = jnp.roll(buf_e, -1).at[-1].set(a_e)
         q2 = jnp.clip(q + V_SCALE * land_e, -Q_BOUND, Q_BOUND)
         gate = jnp.where(embodied,
                          jnp.exp(-0.5 * ((q2 - centres) / SHELTER_W) ** 2),
                          jnp.ones(k) / jnp.sqrt(k))
-        e2 = jnp.clip(DEC * e + pt + KAP * gate * jnp.tanh(land_r), -CLIP, CLIP)
+        drive = jnp.where(kreg == 1, jnp.tanh(land_r[0]) * jnp.ones(k), land_r[:k])
+        e2 = jnp.clip(DEC * e + pt + KAP * gate * drive, -CLIP, CLIP)
         ok = alive & (jnp.max(jnp.abs(e2)) <= EMAX)
         e2 = jnp.where(ok, e2, e)
         return (v, u, sp, syn, buf_r, buf_e, e2, q2, ok, steps + ok), None
 
     init = (jnp.full(N, -65.0), jnp.zeros(N), jnp.zeros(N), jnp.zeros(N),
-            jnp.zeros(TAU), jnp.zeros(TAU), jnp.zeros(k), 0.0, True, 0)
+            jnp.zeros((TAU, kreg)), jnp.zeros(TAU), jnp.zeros(k), 0.0, True, 0)
     (*_, steps), _ = lax.scan(step, init, p)
     return steps
 
 
-def make_fitness(embodied):
-    ms = jit(lambda f, P: jnp.mean(vmap(lambda p: survive(f, p, embodied))(P)))
+def make_fitness(embodied, kreg=1, budget=1.0):
+    ms = jit(lambda f, P: jnp.mean(vmap(lambda p: survive(f, p, embodied, kreg, budget))(P)))
     return ms, jit(lambda POP, P: vmap(lambda f: ms(f, P))(POP))
 
 
@@ -150,12 +154,12 @@ def calibrate(stream, length, target_frac=0.35, seed=0):
     The geometric channels are smooth, so any persistent component is amplified by
     1/(1-DEC) = 50; without calibration even a silent agent dies in ~10 steps and the task is
     unlearnable. Calibrating on the SILENT agent keeps the environment label-free."""
-    z = jnp.zeros(n_params_embodied())
+    z = jnp.zeros(n_params_embodied(N, KREG_G[0]))
     lo, hi = 1e-4, 2.0
     for _ in range(18):
         mid = np.sqrt(lo * hi)
         P = episodes(stream / (stream.std() + 1e-9) * mid, 12, length, seed)
-        surv = float(np.mean([survive(z, pp) for pp in P]))
+        surv = float(np.mean([survive(z, pp, True, KREG_G[0], 1.0) for pp in P]))
         if surv < target_frac * length:
             hi = mid
         else:
@@ -186,7 +190,8 @@ def main(args):
 
     Ptr = episodes(stream, args.eps, args.length, args.seed)
     Pte = episodes(stream, 64, args.length, args.seed + 10_000)
-    ms, pop_f = make_fitness(bool(args.embodied))
+    KREG_G[0] = args.kreg
+    ms, pop_f = make_fitness(bool(args.embodied), args.kreg, args.budget)
 
     def fitness(X):
         return np.asarray(pop_f(jnp.asarray(X, dtype=jnp.float32), Ptr), dtype=float)
@@ -201,7 +206,7 @@ def main(args):
             print("  gen %4d  train %7.2f  test %7.2f  sigma %.4f  [%.1fs]" % (
                 g, float(bf), te, sig, time.time() - t0), flush=True)
 
-    D = n_params_embodied()
+    D = n_params_embodied(N, args.kreg)
     if args.search == "cmaes":
         best, bf, _ = run_cmaes(fitness, D, args.gens, pop=args.pop,
                                 sigma0=args.sigma0, seed=args.seed, callback=cb)
@@ -222,6 +227,8 @@ if __name__ == "__main__":
     ap.add_argument("--embodied", type=int, default=1)
     ap.add_argument("--hotspot", type=int, default=1)
     ap.add_argument("--autoscale", type=int, default=1)
+    ap.add_argument("--kreg", type=int, default=1)
+    ap.add_argument("--budget", type=float, default=1.0)
     ap.add_argument("--target_frac", type=float, default=0.35)
     ap.add_argument("--search", choices=["cmaes", "selection"], default="cmaes")
     ap.add_argument("--seed", type=int, default=0)
