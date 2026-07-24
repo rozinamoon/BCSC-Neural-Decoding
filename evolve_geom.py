@@ -31,6 +31,8 @@ import jax.numpy as jnp
 import jax.random as jr
 from jax import lax, vmap, jit
 
+from search import run_cmaes, run_selection_only
+
 N, NT, TAU, KAP, DEC, CLIP, EMAX = 32, 10, 8, 1.0, 0.98, 10.0, 4.0
 DT_IZH, V_THRESH, I_TONIC, INPUT_SCALE, SYN_DECAY = 0.5, 30.0, 2.95, 30.0, 0.8
 P_STD = 0.3
@@ -189,27 +191,30 @@ def evolve(args) -> None:
     Ptest = episodes(stream, 64, args.length, args.seed + 10_000)
     mean_surv, pop_surv = make_fitness(args.obs == "dup")
 
-    key = jr.PRNGKey(args.seed)
-    k1, key = jr.split(key)
-    POP = jr.normal(k1, (args.pop, n_params())) * args.init_std
+    def fitness(X):
+        return np.asarray(pop_surv(jnp.asarray(X, dtype=jnp.float32), Ptrain), dtype=float)
+
     hist, t0 = [], time.time()
-    for g in range(args.gens):
-        fit = pop_surv(POP, Ptrain)
-        order = jnp.argsort(fit)[::-1]
-        elite = POP[order[:args.elite]]
-        key, ks, km = jr.split(key, 3)
-        idx = jr.randint(ks, (args.pop - args.elite, args.k), 0, args.pop)
-        sel = jnp.argmax(fit[idx], axis=1)
-        parents = POP[idx[jnp.arange(idx.shape[0]), sel]]
-        POP = jnp.concatenate([elite, parents + jr.normal(km, parents.shape) * args.sigma], 0)
-        if g % args.log_every == 0 or g == args.gens - 1:
-            te = float(mean_surv(elite[0], Ptest))
-            hist.append({"gen": int(g), "train": float(fit[order[0]]), "test": te})
-            print("  gen %4d  train %7.2f  test %7.2f   [%.1fs]" % (
-                g, float(fit[order[0]]), te, time.time() - t0), flush=True)
+
+    def cb(g, es, X, f, best_x, best_f):
+        if g % args.log_every == 0 or g == args.gens:
+            te = float(mean_surv(jnp.asarray(best_x, dtype=jnp.float32), Ptest))
+            sig = getattr(es, "sigma", float("nan"))
+            hist.append({"gen": int(g), "train": float(best_f), "test": te, "sigma": float(sig)})
+            print("  gen %4d  train %7.2f  test %7.2f  sigma %.4f  [%.1fs]" % (
+                g, float(best_f), te, sig, time.time() - t0), flush=True)
+
+    print("search = %s" % args.search, flush=True)
+    if args.search == "cmaes":
+        best, bf, _ = run_cmaes(fitness, n_params(), args.gens, pop=args.pop,
+                                sigma0=args.sigma0, seed=args.seed, callback=cb)
+    else:
+        best, bf, _ = run_selection_only(fitness, n_params(), args.gens, pop=args.pop,
+                                         sigma=args.sigma, elite_frac=args.elite_frac,
+                                         seed=args.seed, init_scale=args.init_std, callback=cb)
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-    np.save(args.out, np.asarray(POP[0]))
+    np.save(args.out, np.asarray(best))
     with open(args.out.replace(".npy", "_log.json"), "w") as fh:
         json.dump({"args": vars(args), "history": hist}, fh, indent=2)
     print("\nsaved %s   (max survival = %d)" % (args.out, args.length))
@@ -225,7 +230,9 @@ if __name__ == "__main__":
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--gens", type=int, default=800)
     ap.add_argument("--pop", type=int, default=512)
-    ap.add_argument("--elite", type=int, default=32)
+    ap.add_argument("--search", choices=["cmaes", "selection"], default="cmaes")
+    ap.add_argument("--sigma0", type=float, default=1.0)
+    ap.add_argument("--elite_frac", type=float, default=0.25)
     ap.add_argument("--k", type=int, default=3)
     ap.add_argument("--sigma", type=float, default=0.05)
     ap.add_argument("--init_std", type=float, default=1.0)
