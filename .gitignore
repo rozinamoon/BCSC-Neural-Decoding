@@ -17,3 +17,4 @@ EEG_Data_Processing_ses02_npz*/
 result_eeg/
 results_eeg/
 log_*.txt
+npz2/
