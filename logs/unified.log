@@ -1,0 +1,65 @@
+UNIFIED | CSD -> xDAWN -> prototype-augmented windowed SPD -> tangent -> LDA
+window 200-1010 ms | 32 jobs | grid 8 | pool 32
+
+  [ 1/32] S01 place best=0.642 cfg=(True, 2, 1)  80s
+  [ 2/32] S08 place best=0.600 cfg=(True, 2, 2)  80s
+  [ 3/32] S10 place best=0.592 cfg=(True, 1, 2)  86s
+  [ 4/32] S12 place best=0.915 cfg=(True, 2, 1)  87s
+  [ 5/32] S13 place best=0.561 cfg=(False, 2, 1)  92s
+  [ 6/32] S02 place best=0.783 cfg=(True, 2, 1)  100s
+  [ 7/32] S03 place best=0.733 cfg=(False, 2, 1)  101s
+  [ 8/32] S11 place best=0.821 cfg=(True, 2, 1)  101s
+  [ 9/32] S06 place best=0.596 cfg=(True, 2, 1)  102s
+  [10/32] S05 place best=0.575 cfg=(False, 2, 1)  105s
+  [11/32] S09 place best=0.658 cfg=(True, 1, 2)  107s
+  [12/32] S07 place best=0.855 cfg=(True, 2, 1)  108s
+  [13/32] S14 place best=0.613 cfg=(True, 1, 2)  108s
+  [14/32] S04 place best=0.675 cfg=(True, 1, 1)  111s
+  [15/32] S15 place best=0.583 cfg=(False, 2, 1)  114s
+  [16/32] S16 place best=0.554 cfg=(True, 2, 1)  116s
+  [17/32] S01 ph11  best=0.130 cfg=(False, 2, 1)  820s
+  [18/32] S13 ph11  best=0.125 cfg=(False, 2, 2)  823s
+  [19/32] S14 ph11  best=0.158 cfg=(True, 2, 1)  915s
+  [20/32] S03 ph11  best=0.277 cfg=(False, 1, 1)  924s
+  [21/32] S12 ph11  best=0.229 cfg=(True, 1, 1)  937s
+  [22/32] S07 ph11  best=0.373 cfg=(True, 1, 1)  1064s
+  [23/32] S09 ph11  best=0.302 cfg=(True, 1, 2)  1110s
+  [24/32] S11 ph11  best=0.458 cfg=(True, 1, 2)  1137s
+  [25/32] S08 ph11  best=0.151 cfg=(False, 1, 1)  1232s
+  [26/32] S05 ph11  best=0.222 cfg=(True, 1, 1)  1248s
+  [27/32] S02 ph11  best=0.218 cfg=(True, 1, 2)  1353s
+  [28/32] S10 ph11  best=0.115 cfg=(False, 1, 1)  1411s
+  [29/32] S06 ph11  best=0.118 cfg=(True, 2, 1)  1467s
+  [30/32] S16 ph11  best=0.129 cfg=(False, 1, 2)  1515s
+  [31/32] S15 ph11  best=0.135 cfg=(False, 1, 1)  1547s
+  [32/32] S04 ph11  best=0.136 cfg=(False, 2, 1)  1905s
+
+=== place (chance 0.500, n=16) ===
+  csd=False nf=1 K=1  dim=253    0.5883
+  csd=False nf=1 K=2  dim=506    0.5627
+  csd=False nf=2 K=1  dim=990    0.5920
+  csd=False nf=2 K=2  dim=1980   0.5617
+  csd=True  nf=1 K=1  dim=253    0.6284
+  csd=True  nf=1 K=2  dim=506    0.6120
+  csd=True  nf=2 K=1  dim=990    0.6475
+  csd=True  nf=2 K=2  dim=1980   0.6173
+  BEST (True, 2, 1) = 0.6475  (15/16 above chance)
+    CSD effect nf=1 K=1: +0.0402 [-0.0010,+0.0813] p=0.0551
+    CSD effect nf=1 K=2: +0.0493 [+0.0061,+0.0925] p=0.0281
+    CSD effect nf=2 K=1: +0.0555 [+0.0007,+0.1104] p=0.0477
+    CSD effect nf=2 K=2: +0.0556 [+0.0035,+0.1076] p=0.0381
+
+=== ph11 (chance 0.091, n=16) ===
+  csd=False nf=1 K=1  dim=253    0.1424
+  csd=False nf=1 K=2  dim=506    0.1303
+  csd=False nf=2 K=1  dim=990    0.1400
+  csd=False nf=2 K=2  dim=1980   0.1236
+  csd=True  nf=1 K=1  dim=253    0.1898
+  csd=True  nf=1 K=2  dim=506    0.1810
+  csd=True  nf=2 K=1  dim=990    0.1800
+  csd=True  nf=2 K=2  dim=1980   0.1632
+  BEST (True, 1, 1) = 0.1898  (16/16 above chance)
+    CSD effect nf=1 K=1: +0.0473 [-0.0056,+0.1003] p=0.0760
+    CSD effect nf=1 K=2: +0.0507 [-0.0032,+0.1045] p=0.0634
+    CSD effect nf=2 K=1: +0.0400 [-0.0021,+0.0821] p=0.0608
+    CSD effect nf=2 K=2: +0.0396 [-0.0029,+0.0822] p=0.0656
