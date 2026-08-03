@@ -40,6 +40,7 @@ DT_IZH, V_THRESH, I_TONIC, INPUT_SCALE, SYN_DECAY = 0.5, 30.0, 2.95, 30.0, 0.8
 P_STD = 0.3
 V_SCALE, Q_BOUND, SHELTER_W = 0.30, 6.0, 1.2
 KREG_G = [1]
+UNROLL = 8
 ENV_TAU = 150.0
 
 
@@ -123,7 +124,7 @@ def survive(flat, p, embodied=True, kreg=1, budget=1.0):
 
     init = (jnp.full(N, -65.0), jnp.zeros(N), jnp.zeros(N), jnp.zeros(N),
             jnp.zeros((TAU, kreg)), jnp.zeros(TAU), jnp.zeros(k), 0.0, True, 0)
-    (*_, steps), _ = lax.scan(step, init, p)
+    (*_, steps), _ = lax.scan(step, init, p, unroll=UNROLL)
     return steps
 
 
@@ -158,10 +159,10 @@ def calibrate(stream, length, target_frac=0.35, seed=0):
     unlearnable. Calibrating on the SILENT agent keeps the environment label-free."""
     z = jnp.zeros(n_params_embodied(N, KREG_G[0]))
     lo, hi = 1e-4, 2.0
-    for _ in range(18):
+    for _ in range(12):
         mid = np.sqrt(lo * hi)
         P = episodes(stream / (stream.std() + 1e-9) * mid, 12, length, seed)
-        surv = float(np.mean([survive(z, pp, True, KREG_G[0], 1.0) for pp in P]))
+        surv = float(jnp.mean(vmap(lambda pp: survive(z, pp, True, KREG_G[0], 1.0))(P)))
         if surv < target_frac * length:
             hi = mid
         else:

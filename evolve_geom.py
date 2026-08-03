@@ -38,6 +38,7 @@ from search import run_cmaes, run_selection_only
 N, NT, TAU, KAP, DEC, CLIP, EMAX = 32, 10, 8, 1.0, 0.98, 10.0, 4.0
 DT_IZH, V_THRESH, I_TONIC, INPUT_SCALE, SYN_DECAY = 0.5, 30.0, 2.95, 30.0, 0.8
 P_STD = 0.3
+UNROLL = 8
 WIN, STRIDE, NPCA_COV = 50, 1, 10
 
 
@@ -106,7 +107,7 @@ def roll_survive(flat: jnp.ndarray, p: jnp.ndarray, dup: bool = False) -> jnp.nd
 
     init = (jnp.full(N, -65.0), jnp.zeros(N), jnp.zeros(N), jnp.zeros(N),
             jnp.zeros(TAU), jnp.zeros(k), True, 0)
-    (*_, steps), _ = lax.scan(step, init, p)
+    (*_, steps), _ = lax.scan(step, init, p, unroll=UNROLL)
     return steps
 
 
