@@ -51,7 +51,8 @@ def ev(bt, be, ytr, yte):
 
 
 def main(task, seeds):
-    files = [f for f in sorted(glob.glob(os.path.join(BM.DATA, "*.npz")))]
+    files = [f for f in sorted(glob.glob(os.path.join(BM.DATA, "*.npz")))
+             if np.load(f, allow_pickle=True)["X"].shape[1] == 61]
     W, Win, leaks = BM.reservoir_weights(0)
     NAMES = ["cov", "cov+res", "cov+mean", "cov+meandiff", "cov+mean+diffs",
              "cov+mean+diffs+res"]
@@ -59,7 +60,7 @@ def main(task, seeds):
     print("task=%s  data=%s  window %.2f-%.2f  subjects=%d\n" % (
         task, BM.DATA, BM.WMIN, BM.WMAX, len(files)))
     for path in files:
-        Xb, ph = BM.load_subject(path)
+        Xb, ph, _ = BM.load_subject(path)
         X, y, n_win, chance = BM.build_task(Xb, ph, task)
         res = BM.multitimescale_reservoir(X, W, Win, leaks)
         acc = {k: [] for k in NAMES}
