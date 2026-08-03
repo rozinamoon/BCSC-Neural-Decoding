@@ -41,7 +41,8 @@ from pyriemann.utils.mean import mean_riemann
 PHON = ["a", "i", "e", "u", "o", "s", "z", "p", "b", "t", "d"]
 STOPS = ["b", "p", "d", "t"]
 BASE = (-0.2, -0.11)
-DEV = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+DEV = torch.device("cuda" if torch.cuda.is_available()
+                   else "mps" if torch.backends.mps.is_available() else "cpu")
 
 
 def load_pooled(task: str, wmax: float, data_dir: str = "npz"):
