@@ -233,7 +233,9 @@ def laplacian_modes(pos):
 
 
 def montage_laplacian(pos):
-    """The Laplacian operator itself, for use as a smoothness penalty."""
+    """The Laplacian operator itself, for use as a smoothness penalty. Used by the archived
+    filter ablation (attic/studies/arch.py), which measured that the penalty contributes
+    nothing once the between-subject nuisance term is dropped."""
     D2 = ((pos[:, None, :] - pos[None, :, :]) ** 2).sum(-1)
     h2 = np.median(D2[D2 > 0])
     A = np.exp(-D2 / (2 * h2))

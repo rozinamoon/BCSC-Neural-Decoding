@@ -1,80 +1,93 @@
-# model/ — npz2 음소 디코딩 파이프라인
+# model/ — 음소 디코딩 모델 3개
 
-11음소 / 자음-모음 디코딩 모델. 결과 정리는 [`../SUMMARY.md`](../SUMMARY.md),
-시간순 상세 기록은 [`../RESULTS.md`](../RESULTS.md) 11절, 대체된 스크립트 지도는
-[`../SCRIPTS.md`](../SCRIPTS.md).
+11음소 / 자음-모음 디코딩. 결과 정리는 [`../SUMMARY.md`](../SUMMARY.md), 시간순 상세는
+[`../RESULTS.md`](../RESULTS.md) 11절, 통제 연구 코드는
+[`../attic/studies/`](../attic/studies/README.md).
 
-## 성적 (ph11, 우연 0.091)
+## 세 모델
 
-| | 값 |
-|---|---|
-한 번도 만지지 않은 최종 test셋 | **0.306** (SE 0.018, 선택 편향 +0.000) |
-교차검증 15폴드 | 0.305 |
-EEGNet 베이스라인 | 0.225 (동일 폴드 15/15 패, p=2e-8) |
-라벨 순열 귀무 | 0.088 (우연 0.091) |
-미학습 피험자 (LOSO) | 0.139 — 고전·딥 동률, **동작하지 않음** |
+| | 파일 | 무엇인가 | ph11 | 차원 |
+|---|---|---|---|---|
+① | **`eegnet.py`** | 베이스라인. EEGNet-8,2 (Lawhern et al. 2018) | 0.225 | 파라미터 4,011 |
+② | **`final_model.py`** | **메인 모델.** 통제를 통과한 부품만 남긴 설계본 | 0.245 | 666 |
+③ | **`best_concat.py`** | 최고 성능. 표현 두 개를 이어붙인 것 — **설계가 아니라 앙상블** | **0.306** | 5406 |
 
-C/V(우연 0.5): 0.753 / EEGNet 0.685 / 미학습 피험자 0.583.
+우연 0.091. ②③은 미접촉 최종 test셋 기준(③ SE 0.018), ①은 교차검증 15폴드.
+C/V(우연 0.5): ① 0.685 · ③ 0.753.
 
-## 구조
+**②를 쓸 때**: "어느 부품이 왜 있는가"가 중요할 때. 부품마다 통제가 하나씩 붙어 있다.
+**③을 쓸 때**: "우리가 도달한 천장이 얼마인가"가 중요할 때. 정직하게 최고 숫자다.
+**①은 비교 기준**: 동일 폴드에서 ③이 15/15로 이긴다 (p=2e-8, 우연 위 1.60배).
+
+## ② 메인 모델 구조
 
 ```
-X (61채널 × 256샘플, 0–1.0초, 256Hz)
- │
- ├ 1단  필터 : 신호대잡음 최대화 공간 투영  61 → 14
- │    S_phon  = Σ_s Σ_c (M_sc − M_s)(M_sc − M_s)ᵀ        피험자 내 클래스 간 = 신호
- │    S_noise = Σ_s Σ_c Σ_i (x_i − M_sc)(x_i − M_sc)ᵀ    피험자·클래스 내 잔차 = 잡음
- │    W = eigh(S_phon, S_noise + εI) 상위 14열
- │
- ├ 2단  베이스 모델 : 시행당 SPD 하나 (변 36 = 14 + 14 + 8)
- │    A(t) = [ Z(t) ; Z(t−20) ; φ₀(t) … φ₇(t) ]      φ = 직교 DCT
- │    C = A Aᵀ / T      중심화 안 함 (φ행이 유발 파형을 붙잡게)
- │       Z×Z        공간 공분산
- │       Z×Z(t−τ)   선형 교차지연 = 동역학
- │       Z×φ_k      각 모드 파형의 k번째 DCT 성분 = 시간분해 유발반응
- │    → log-Euclidean 접선 → 666차원
- │
- └ 3단  판독 : 접선공간 가우시안, 피험자별 결정규칙
+입력        X  61채널 × 256샘플 (0–1.0초, 256Hz)
+   │
+   ├ 필터    표현 공간 매핑 — 신호대잡음 최대화 공간 투영  61 → 14
+   │    S_phon  = Σ_s Σ_c (M_sc − M_s)(M_sc − M_s)ᵀ       피험자 내 클래스 간 = 신호
+   │    S_noise = Σ_s Σ_c Σ_i (x_i − M_sc)(x_i − M_sc)ᵀ   피험자·클래스 내 잔차 = 잡음
+   │    W = eigh(S_phon, S_noise + εI) 상위 14열,  Z = Wᵀ X
+   │
+   ├ 베이스   시행당 SPD 하나 (변 36 = 14 + 14 + 8)
+   │  모델    A(t) = [ Z(t) ; Z(t−20) ; φ₀(t) … φ₇(t) ]     φ = 직교 DCT, unit RMS
+   │         C = A Aᵀ / T     중심화 안 함 (φ행이 유발 파형을 붙잡게)
+   │            Z×Z        → 공간 공분산
+   │            Z×Z(t−τ)   → 선형 교차지연 = 동역학
+   │            Z×φ_k      → 각 모드 파형의 k번째 DCT 성분 = 시간분해 유발반응
+   │         └ log-Euclidean 접선 사영 → 666차원          (두 번째 표현 공간 매핑)
+   │
+   ├ 분류    접선공간 가우시안, 피험자별 결정 규칙
+   │
+   └ 출력    argmax → 음소 라벨
 ```
 
-2단이 이 설계의 핵심이며, 세 단 중 **주장한 메커니즘이 통제를 통과한 유일한 부품**이다.
-행 수를 고정한 채 시간 구조만 파괴하면 전부 크게 떨어진다: `shuffled` −0.054,
-`gauss` −0.066, `dct_high` −0.101, 행 없음 −0.052 (모두 p<1e-4).
+베이스 모델이 이 설계의 핵심이며, 세 단 중 **주장한 메커니즘이 통제를 통과한 유일한 부품**이다.
+행 수를 고정한 채 시간 구조만 파괴하면 전부 크게 떨어진다: 시간축 치환 −0.054, 구조 없는 iid
+행 −0.066, 고주파 DCT −0.101, 행 없음 −0.052 (모두 p<1e-4).
+
+**분류 단이 하는 일은 피험자 성분을 *분리*하는 게 아니라 *섞지 않는* 것이다.** 분리를 시도했다가
+반증됐다 — 피험자 쌍 간 판별방향 코사인이 0.001~0.012인데 같은 사람 split-half는 0.45~0.75다.
+빼낼 수 있는 부분공간이 아니라 사람마다 다른 결정 규칙이므로, 필터에서 투영 제거하면 개별
+피험자의 음소 신호를 부순다 (−0.025, p=0.0002).
+
+## ③ 최고 성능 모델 구조
+
+몽타주 그래프 라플라시안 고유모드를 공간주파수 순으로 6밴드로 나누고, 밴드마다 표현 **두 개**를
+만들어 이어붙인다.
+
+```
+band_one     밴드당 SPD 하나 (②의 베이스 모델과 같은 형태, 변 28)     → 2495차원
+band_blocks  밴드당 지연증강 접선 + 창4 공분산 접선 + 창4 평균         → 2911차원
+             concat                                                → 5406차원
+```
+
+단독으로는 `band_one`이 `band_blocks`에 진다 (0.270 vs 0.289, p<1e-4). 이어붙이면
+`band_blocks` 대비 +0.017 (p=0.0017). 즉 **둘이 서로 다른 정보를 담고 있어서 이기는 것**이고,
+아키텍처 논거가 아니라 앙상블 논거다. 그래서 설계본과 분리해 뒀다.
 
 ## 파일
 
 | 파일 | 역할 |
 |---|---|
-**`sdcore.py`** | 공유 라이브러리. 로딩·폴드·SPD 연산·공간 필터·표현·판독·보고. 나머지는 전부 여기서만 import하며 서로를 import하지 않는다 |
-**`final_model.py`** | 생산 모델(위 3단) + `--study perm/split/den/adapt/readout` |
-**`holdout.py`** | 미접촉 최종 test셋(시행 20%, seed 12345). 선택 편향 측정 |
-`synth.py` | 밴드별 표현 비교, `--split trial/loso` |
-`onemodel.py` | 통합 객체와 두피 라플라시안 리저버, 대조군 arm 8종 |
-`arch.py` | 구조 감사. `--study filter` 필터 2×2 ablation, `--study phi` 시간 기저 귀속 통제 |
-`nonlin.py` | 비선형 지연 행(2차항)과 동일 행 수 통제 4종 |
-`geom.py` | 라플라시안 밴드와 기저 대조군 (`lap`/`pca`/`chan`/`rand`) |
-`hier.py` | 계층 LDA, `--split trial/token/time` |
-`hier2.py` | 2파라미터 계층 (λ 노이즈 공유, γ 클래스 공유) 표면 |
-`contrast.py` | 대비별 판별방향 공유도 + PERM/ZERO 통제 |
-`budget.py` | 자기 시행 vs 타인 시행 교환비 곡선 |
-`eegnet.py` | EEGNet-8,2 베이스라인 4 arm, `--split trial/loso`, 라벨없는 BN 적응 |
+`sdcore.py` | 공유 라이브러리. 로딩·폴드·SPD 연산·공간 필터·표현·판독·보고. 세 모델이 전부 여기서만 import하며 서로를 import하지 않는다 |
+`eegnet.py` | ① 베이스라인. arm 4종 (`persubj`/`pooled`/`pooled+subjbias`/`pooled+ft_head`), `--split trial/loso`, 라벨없는 BN 적응 |
+`final_model.py` | ② 메인 모델 + `--study perm/split/den/adapt/readout` |
+`best_concat.py` | ③ 최고 성능 + `--study split/perm/readout` |
+`holdout.py` | 세 모델을 **한 번도 만지지 않은 최종 test셋**(시행 20%, seed 12345)에서 비교. 선택 편향 측정 |
 
 ## 실행
 
-데이터는 저장소 루트의 `npz2/`에서 읽는다. 경로가 `__file__` 기준으로 해석되므로
-저장소 루트에서든 `model/` 안에서든 동작한다.
+데이터는 저장소 루트 `npz2/`에서 읽는다. 경로가 `__file__` 기준이라 저장소 루트에서든
+`model/` 안에서든 동작한다.
 
 ```bash
+python model/holdout.py     --task ph11                   # 세 모델 미접촉 test셋 비교
 python model/final_model.py --task ph11 --study split     # 네 분할 전부
 python model/final_model.py --task ph11 --study perm      # 라벨 순열 귀무
-python model/holdout.py     --task ph11                   # 미접촉 최종 test셋
-python model/arch.py        --task ph11 --study phi       # 시간 기저 귀속 통제
-python model/arch.py        --task ph11 --study filter    # 필터 2×2 ablation
-python model/nonlin.py      --task ph11                   # 비선형 지연 통제
-python model/contrast.py                                  # 대비별 공유도
-python model/budget.py      --task ph11                   # 교환비 곡선
-python model/synth.py       --task ph11 --seeds 3 --comb 1
-python model/synth.py       --task ph11 --split loso --comb 1
+python model/final_model.py --task ph11 --study adapt     # 라벨 없는 재중심화 (LOSO)
+python model/best_concat.py --task ph11 --study split
+python model/best_concat.py --task ph11 --study perm
 python model/eegnet.py      --task ph11 --seeds 3
 python model/eegnet.py      --task ph11 --split loso
 ```
@@ -90,4 +103,7 @@ python model/eegnet.py      --task ph11 --split loso
 
 시행 단위 분할에서 **시행은 하나도 겹치지 않지만 피험자는 전원 겹친다.** 그래서 0.306은
 "그 사람의 보정 데이터가 있을 때 그 사람의 새 시행"에 대한 값이고, "새 사람에게 통한다"는
-주장은 LOSO 0.139로만 할 수 있다. 두 숫자를 섞어 쓰지 말 것.
+LOSO 0.143으로만 말할 수 있다. 두 숫자를 섞어 쓰지 말 것.
+
+미학습 피험자에서는 세 모델이 전부 동률이고 전부 실패한다 (③ 0.143 · ① 0.139 · ② 0.140).
+라벨 없는 적응도 양쪽에서 유의하지 않다 (② +0.017 p=0.068, ① +0.004 p=0.50).

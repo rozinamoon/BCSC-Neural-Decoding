@@ -4,31 +4,34 @@
 **대체됨**을 구분한다. 정리본은 `SUMMARY.md`, 시간순 상세 기록은 `RESULTS.md`에 있고, 1–10절이 예전 파이프라인(`npz`, 0–0.5s),
 11절이 현재 파이프라인(`npz2`, 0–1.0s)이다.
 
-## 현행 — `model/` (npz2, RESULTS.md 11절, 정리본 `SUMMARY.md`)
+## 현행 — `model/` (모델 3개 + 평가)
 
-코드는 `model/`에 있고 자체 README를 가진다: [`model/README.md`](model/README.md).
+정리본 `SUMMARY.md`, 상세 `RESULTS.md` 11절, 모델 문서 [`model/README.md`](model/README.md).
 
-| 파일 | 역할 |
-|---|---|
-| **`model/sdcore.py`** | **공유 라이브러리.** 로딩·폴드·SPD 연산·공간 필터·표현·판독·보고. 아래 스크립트는 전부 여기서 import하며 서로를 import하지 않는다 |
-| **`model/final_model.py`** | **생산 모델.** 3단(SNR 필터 → 통합 SPD → 개인 판독) + `--study perm/split/den/adapt` |
-| `model/synth.py` | 밴드별 표현 비교 (`band_blocks` / `band_one` / concat / `global_one`), `--split trial/loso` |
-| `model/onemodel.py` | 통합 객체와 두피 라플라시안 리저버, 대조군 arm 8종 |
-| `model/arch.py` | 3단 구조 감사. `--study filter` 필터 2×2 ablation, `--study phi` 시간 기저 귀속 통제 |
-| `model/nonlin.py` | 비선형 지연 행(2차항)과 동일 행 수 통제 4종 |
-| `model/geom.py` | 라플라시안 밴드와 기저 대조군 (`lap`/`pca`/`chan`/`rand`) |
-| `model/hier.py` | 계층 LDA (공유 Σ + γ-수축 평균), `--split trial/token/time` |
-| `model/hier2.py` | 2파라미터 계층 (λ 노이즈 공유, γ 클래스 공유) 표면 |
-| `model/contrast.py` | 대비별 판별방향 공유도 + PERM/ZERO 통제 |
-| `model/budget.py` | 자기 시행 vs 타인 시행 교환비 곡선 |
-| `model/eegnet.py` | EEGNet-8,2 베이스라인 4 arm, `--split trial/loso`, 라벨없는 BN 적응 |
-| **`model/holdout.py`** | **미접촉 최종 test셋** (시행 20%, seed 12345). 선택 편향 측정 |
+| | 파일 | 무엇인가 | ph11 | 차원 |
+|---|---|---|---|---|
+① | `model/eegnet.py` | 베이스라인 EEGNet-8,2 | 0.225 | 파라미터 4,011 |
+② | **`model/final_model.py`** | **메인 모델.** 통제 통과 부품만 | 0.245 | 666 |
+③ | `model/best_concat.py` | 최고 성능. 표현 2개 concat, 앙상블 | **0.306** | 5406 |
+| | `model/sdcore.py` | 공유 라이브러리. 세 모델이 여기서만 import하고 서로를 import하지 않는다 |
+| | `model/holdout.py` | 세 모델을 미접촉 최종 test셋(시행 20%, seed 12345)에서 비교. 선택 편향 측정 |
+
+우연 0.091. ②③은 미접촉 test셋, ①은 교차검증 15폴드.
+
+## 통제 연구 — `attic/studies/`
+
+`SUMMARY.md` 4절의 숫자를 만든 9개 스크립트. 모델이 아니라 "부품이 주장한 이유로 작동하는가"를
+재는 실험이라 분리했다. 실행법과 대응표는 [`attic/studies/README.md`](attic/studies/README.md).
+공유 라이브러리가 `model/`에 있으므로 `PYTHONPATH=model`이 필요하다.
+
+`arch.py` (시간 기저 귀속 · 필터 2×2) · `nonlin.py` (비선형 지연) · `contrast.py` (대비별
+공유도) · `budget.py` (교환비) · `geom.py` (기저 대조군) · `synth.py` (표현 비교 · LOSO) ·
+`hier.py` (분할 통제) · `hier2.py` (λ/γ 표면) · `onemodel.py` (리저버 대조군)
 
 리팩터 후 모든 스크립트가 로그의 숫자를 자릿수까지 재현하는 것을 확인했다
-(`hier.py --task cv`, `final_model.py --study den`, `arch.py --study phi`,
-`onemodel.py --task place` 4종 + `sdcore` 대 원본 함수 36개 `max|diff| = 0`).
+(`sdcore` 대 원본 함수 36개 `max|diff| = 0`, 로그 숫자 5종 정확 재현).
 
-## `attic/` — 대체됨 (RESULTS.md 1–10절의 근거로 보존)
+## `attic/` — 그 외 대체됨 (RESULTS.md 1–10절의 근거로 보존)
 
 루트에 121개가 쌓여 있어서 주제별로 `attic/`으로 옮겼다. **삭제가 아니라 이동**이다.
 1–10절의 숫자가 이 파일들에서 나왔고, 그중 14개(`shared_ceiling.py`, `stagewise.py`,
@@ -87,11 +90,21 @@
 ## 재현 방법
 
 ```bash
-python model/final_model.py --task ph11 --study split   # 네 분할 전부
-python model/final_model.py --task ph11 --study perm    # 라벨 순열 귀무
-python model/arch.py --task ph11 --study phi            # 시간 기저 귀속 통제
-python model/arch.py --task ph11 --study filter         # 필터 단 2×2 ablation
-python model/nonlin.py --task ph11                      # 비선형 지연 행 통제
-python model/synth.py --task ph11 --split loso --comb 1  # 미학습 피험자
-python model/eegnet.py --task ph11 --seeds 3            # 베이스라인
+# 모델 (model/)
+python model/holdout.py     --task ph11                  # 세 모델 미접촉 test셋 비교
+python model/final_model.py --task ph11 --study split     # 네 분할 전부
+python model/final_model.py --task ph11 --study perm      # 라벨 순열 귀무
+python model/final_model.py --task ph11 --study adapt     # 라벨 없는 재중심화 (LOSO)
+python model/best_concat.py --task ph11 --study split
+python model/best_concat.py --task ph11 --study perm
+python model/eegnet.py      --task ph11 --seeds 3
+python model/eegnet.py      --task ph11 --split loso      # + 라벨없는 BN 적응
+
+# 통제 연구 (attic/studies/, 공유 라이브러리가 model/에 있어 PYTHONPATH 필요)
+PYTHONPATH=model python attic/studies/arch.py     --task ph11 --study phi
+PYTHONPATH=model python attic/studies/arch.py     --task ph11 --study filter
+PYTHONPATH=model python attic/studies/nonlin.py   --task ph11
+PYTHONPATH=model python attic/studies/contrast.py
+PYTHONPATH=model python attic/studies/budget.py   --task ph11
+PYTHONPATH=model python attic/studies/synth.py    --task ph11 --split loso --comb 1
 ```

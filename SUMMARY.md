@@ -49,7 +49,7 @@ X (61채널 × 256샘플)
  └ STAGE 3  판독 : 접선공간 가우시안, 피험자별 결정규칙
 ```
 
-### 2.2 변형 (`model/synth.py`, 라플라시안 61모드 6밴드)
+### 2.2 최고 성능 모델 (`model/best_concat.py`, 라플라시안 61모드 6밴드)
 
 몽타주 그래프 라플라시안 고유모드를 공간주파수 순으로 6밴드 분할 (`[0:10]…[50:61]`),
 밴드마다 표현을 만들어 concat.
@@ -376,23 +376,44 @@ hyperalignment (0.991 → 0.531).
 
 ---
 
-## 7. 재현
+## 7. 코드 배치
+
+`model/`에는 **모델 3개와 그것을 평가하는 코드만** 둔다.
+
+| | 파일 | 무엇인가 |
+|---|---|---|
+① | `model/eegnet.py` | 베이스라인 EEGNet-8,2 |
+② | `model/final_model.py` | **메인 모델.** 통제를 통과한 부품만 (3.3의 0.245) |
+③ | `model/best_concat.py` | 최고 성능. 표현 두 개 concat (3.3의 0.306), 설계가 아닌 앙상블 |
+| | `model/sdcore.py` | 공유 라이브러리. 세 모델이 여기서만 import |
+| | `model/holdout.py` | 세 모델을 미접촉 test셋에서 비교, 선택 편향 측정 |
+
+4절의 통제 연구를 만든 스크립트는 `attic/studies/`에 있다 (`arch`, `nonlin`, `contrast`,
+`budget`, `geom`, `hier`, `hier2`, `onemodel`, `synth`). 모델이 아니라 "부품이 주장한 이유로
+작동하는가"를 재는 실험이라 분리했다. 실행법은 `attic/studies/README.md` — 공유 라이브러리가
+`model/`에 있으므로 `PYTHONPATH=model`이 필요하다.
+
+## 8. 재현
 
 ```bash
+# 모델 (model/)
+python model/holdout.py     --task ph11                  # 세 모델 미접촉 test셋 비교
 python model/final_model.py --task ph11 --study split    # 네 분할 전부
 python model/final_model.py --task ph11 --study perm     # 라벨 순열 귀무
-python model/final_model.py --task ph11 --study adapt    # 라벨 없는 재중심화
-python model/arch.py        --task ph11 --study phi      # 시간 기저 귀속 통제
-python model/arch.py        --task ph11 --study filter   # 필터 단 2×2 ablation
-python model/nonlin.py      --task ph11                  # 비선형 지연 행 통제
-python model/contrast.py                                 # 대비별 공유도 + PERM/ZERO
-python model/budget.py      --task ph11                  # 교환비 곡선
-python model/synth.py       --task ph11 --seeds 3 --comb 1        # 표현 비교
-python model/synth.py       --task ph11 --split loso --comb 1     # 미학습 피험자
-python model/eegnet.py      --task ph11 --seeds 3                 # 베이스라인
-python model/eegnet.py      --task ph11 --split loso              # 베이스라인 LOSO + BN 적응
-python model/final_model.py --task ph11 --study readout           # per-subject vs pooled
-python model/holdout.py     --task ph11                           # 미접촉 최종 test셋
+python model/final_model.py --task ph11 --study adapt    # 라벨 없는 재중심화 (LOSO)
+python model/final_model.py --task ph11 --study readout  # per-subject vs pooled
+python model/best_concat.py --task ph11 --study split
+python model/best_concat.py --task ph11 --study perm
+python model/eegnet.py      --task ph11 --seeds 3
+python model/eegnet.py      --task ph11 --split loso     # + 라벨없는 BN 적응
+
+# 통제 연구 (attic/studies/, 공유 라이브러리가 model/에 있어 PYTHONPATH 필요)
+PYTHONPATH=model python attic/studies/arch.py     --task ph11 --study phi
+PYTHONPATH=model python attic/studies/arch.py     --task ph11 --study filter
+PYTHONPATH=model python attic/studies/nonlin.py   --task ph11
+PYTHONPATH=model python attic/studies/contrast.py
+PYTHONPATH=model python attic/studies/budget.py   --task ph11
+PYTHONPATH=model python attic/studies/synth.py    --task ph11 --split loso --comb 1
 ```
 
 공유 코드는 `sdcore.py`. 리팩터 후 함수 36개가 원본과 `max|diff| = 0`이고, 로그 숫자 5종이
