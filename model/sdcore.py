@@ -12,8 +12,8 @@ Contents
     data          load_subject, load_pooled, the task definitions
     folds         trial / token / time / loso, all returning (train_idx, test_idx) pairs
     spd           spd_log, cov, triu, delay_aug, phi_rows
-    spatial       laplacian_modes, basis_full, basis_modes, scatters, noise_scatter,
-                  disc_filter, snr_filter, montage_W, reservoir
+    spatial       laplacian_modes, montage_laplacian, basis_full, basis_modes,
+                  scatters, noise_scatter, disc_filter, snr_filter
     represent     window_blocks, unified_spd, tangent, block_features, pca_blocks
     readout       lda_pooled, lda_persubj, persubj_pipeline          plain
                   cell_means, shared_precision, personal_precision, gauss_predict, blend,
@@ -347,40 +347,6 @@ def snr_filter(X, y, sid, tr, n_cls, d, eps=0.05, den_kind="noise"):
         den = den + trace_norm(noise_scatter(X, y, sid, tr, n_cls))
     w, U = eigh(trace_norm(Sp), den)
     return U[:, np.argsort(w)[::-1][:d]]
-
-
-def montage_W(kind, pos, rho, seed=0):
-    """Reservoir recurrence. "lap" is the scalp graph itself, so in the linear regime the
-    eigenmodes are the Laplacian modes and mode k has pole (1-a) - a*rho*lam_k: spatial
-    frequency becomes the time constant. "rand" is the matched control -- geometry beats it by
-    +0.024, 15/15 folds, but the reservoir adds nothing to a delay embedding (-0.019)."""
-    D2 = ((pos[:, None, :] - pos[None, :, :]) ** 2).sum(-1)
-    A = np.exp(-D2 / (2 * np.median(D2[D2 > 0])))
-    np.fill_diagonal(A, 0.0)
-    if kind == "lap":
-        W = -(np.diag(A.sum(1)) - A)
-    elif kind == "adj":
-        W = A
-    elif kind == "rand":
-        rng = np.random.default_rng(seed)
-        n = len(pos)
-        W = rng.normal(0, 1, (n, n)) * (rng.random((n, n)) < 0.1)
-    else:
-        raise ValueError(kind)
-    return W / (np.max(np.abs(np.linalg.eigvals(W))) + 1e-12) * rho
-
-
-def reservoir(X, W, leak, gain, nl):
-    """One node per electrode, W_in = I, no washout -- the transient is the signal, and a
-    washout long enough for generalised synchronisation would discard it."""
-    n, C, T = X.shape
-    r = np.zeros((n, C))
-    out = np.empty((n, C, T))
-    for t in range(T):
-        pre = r @ W.T + gain * X[:, :, t]
-        r = (1 - leak) * r + leak * (np.tanh(pre) if nl == "tanh" else pre)
-        out[:, :, t] = r
-    return out
 
 
 # ---------------------------------------------------------------- representations

@@ -14,7 +14,7 @@ PYTHONPATH=model python attic/studies/geom.py     --task ph11 --basis lap     # 
 PYTHONPATH=model python attic/studies/synth.py    --task ph11 --comb 1        # 표현 비교
 PYTHONPATH=model python attic/studies/hier.py     --task ph11 --split token   # 분할 통제
 PYTHONPATH=model python attic/studies/hier2.py    --task ph11                 # λ/γ 표면
-PYTHONPATH=model python attic/studies/onemodel.py --task ph11                 # 리저버 대조군
+PYTHONPATH=model python attic/studies/onemodel.py --task ph11                 # 통합 객체 vs 블록
 ```
 
 | 파일 | 무엇을 재는가 | SUMMARY.md 절 |
@@ -27,7 +27,11 @@ PYTHONPATH=model python attic/studies/onemodel.py --task ph11                 # 
 `synth.py` | `band_one` / `band_blocks` / concat / `global_one` 표현 비교, `--split loso` | 3.1, 3.5 |
 `hier.py` | 계층 LDA, `--split trial/token/time` 분할 통제 | 3.4 |
 `hier2.py` | λ(노이즈 공유) × γ(클래스 공유) 표면 | 4.4 |
-`onemodel.py` | 통합 객체와 두피 라플라시안 리저버 vs 랜덤 리저버 | 4.1, 4.3 |
+`onemodel.py` | 통합 객체 4종 비교 (`one_K0`/`one_KT`/`blocks`/concat), K_time 효과 | 4.1 |
+
+리저버 arm은 제거했다 — 두피 라플라시안 W가 랜덤 W를 +0.024로 이겼지만(15/15, p<1e-4) 지연
+임베딩에 보태지 못했고(−0.019, p<1e-4), 쓰지 않으므로 코드를 남기지 않았다. 측정 기록은
+`onemodel.py` docstring과 `SUMMARY.md` 4.3에 있다.
 
 이 스크립트들이 만든 결론 중 `model/`에 반영된 것: `final_model.py`는 통제를 통과한 부품만
 남긴 결과이고, 통과하지 못한 것(피험자 억제, 기하 매끄러움 prior, 라플라시안 기저, 리저버,

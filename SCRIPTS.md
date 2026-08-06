@@ -41,20 +41,20 @@
 
 | 디렉터리 | 개수 | 내용 |
 |---|---|---|
-`attic/decode/` | 29 | 표상·융합·전이 탐색 (ROCKET, Xdawn, 필터뱅크, task 통합 등) |
-`attic/pooling/` | 16 | 피험자 통합·정렬 계보. `shared_ceiling.py`의 "공유 129%"는 11.4에서 반증 |
-`attic/audit/` | 13 | 누수·confound·TMS 감사 |
-`attic/speed/` | 12 | 고속 LDA/Riemannian, JAX 포팅, 검증 유틸 |
-`attic/type1/` | 10 | Type I 기질 시험 (9절에서 종결) + `gstream_s1.npy`, `pstream.npy` |
-`attic/reservoir/` | 9 | 리저버 6종 + 개념자. **W가 전부 랜덤이었고 전극 좌표를 쓴 적 없다** |
-`attic/bestmodel/` | 8 | 최고 모델 계보 → `final_model.py`가 대체 |
-`attic/prepro/` | 8 | 전처리·QC (+`prepro`) |
-`attic/kernel/` | 6 | MKL·측도 커널. 블록 concat + LDA에 짐 |
-`attic/dda/` | 6 | DDA 지연·카오스. a₃ 부재는 11.10에서 재확인 |
-`attic/unified/` | 5 | 통합 SPD 초기형 → `onemodel.py`/`synth.py`가 시간 기저를 추가해 대체 |
-`attic/misc/` | 나머지 | `eda.ipynb`, `final_results.csv` 등 |
-`attic/_prerefactor/` | 11 | 리팩터 전 스크립트 원본 |
-`attic/data_ml_ready/`, `attic/figs/`, `attic/figures/` | | 예전 산출물 |
+`attic/pooling/` | 16 | 피험자 통합·정렬 계보. `shared_ceiling.py`의 "공유 129%"는 4.4에서 반증 |
+`attic/studies/` | 10 | **통제 연구.** `SUMMARY.md` 4절을 만든 코드 — 위 절 참조 |
+`attic/prepro/` | 9 | 전처리·QC (+`prepro`) |
+`attic/audit/` | 7 | 누수·confound·TMS 감사 |
+`attic/speed/` | 7 | 고속 LDA/Riemannian, JAX 포팅, 검증 유틸 |
+`attic/bestmodel/` | 7 | 최고 모델 계보 → `model/final_model.py`가 대체 |
+`attic/decode/` | 6 | 표상·융합·전이 탐색 (ROCKET, Xdawn, 필터뱅크, task 통합 등) |
+`attic/dda/` | 6 | DDA 지연·카오스. a₃ 부재는 4.3에서 재확인 |
+`attic/kernel/` | 4 | MKL·측도 커널. 블록 concat + LDA에 짐 |
+`attic/unified/` | 4 | 통합 SPD 초기형 → 시간 기저를 추가해 `model/`이 대체 |
+`attic/figs/` | 2 | 예전 ERP 그림 |
+`attic/misc/` | 2 | `eda.ipynb`, `final_results.csv` |
+`attic/data_ml_ready/` | 1 | 예전 파생 데이터 (0–0.5s 창) |
+`attic/figures/` | 1 | 예전 그림 |
 
 예전 데이터셋(`npz`, 992MB)과 `attic/data_ml_ready/`(20MB)는 0–0.5s 창이라 11절 숫자와
 직접 비교하면 안 된다.
@@ -62,14 +62,12 @@
 | 묶음 | 파일 | 11절에서 대체한 것 |
 |---|---|---|
 | 통합 SPD 초기형 | `unified.py`, `unified2.py`, `unified2b.py`, `pooled_unified.py` | `onemodel.py` (시간 기저 추가), `synth.py` (밴드별) |
-| 리저버 | `reservoir.py`, `reservoir_riemann.py`, `reservoir_verify.py`, `spd_reservoir.py`, `resonant_reservoir.py`, `tangent_into_reservoir.py`, `delay_geom_reservoir.py`, `neuron_types.py` | `onemodel.py`의 `montage_W` (전부 랜덤 W였음) |
 | DDA | `dda_bank.py`, `dda_chaos.py`, `dda_delaysearch.py`, `dda_diagnostics.py`, `dda_reservoir.py`, `dda_vs_volt.py` | `nonlin.py` (모델 안에서 2차항 측정) |
 | 피험자 통합 | `pooled_training.py`, `pooled_net.py`, `pooled_factor.py`, `pooled_align.py`, `hyperalign.py`, `hyperalign_check.py`, `xsubj_align.py`, `alldata_xsubj.py`, `riemann_xsubj.py`, `shared_ceiling.py`, `stagewise.py`, `bayes_ard.py`, `spatial_bands.py` | `hier.py`/`hier2.py`/`contrast.py`/`budget.py` — `shared_ceiling.py`의 "공유 129%"는 11.4에서 반증됨 |
 | 커널 | `mkl_riem.py`, `mkl_test.py`, `riem_kernel.py`, `measure_kernel.py`, `conceptors.py` | 없음 (MKL 경로는 블록 concat + LDA에 짐) |
 | 최고 모델 계보 | `best_model.py`, `best_model2.py`, `best_model3.py`, `mean_on_bm2.py`, `restore_mean.py`, `final.py`, `optimize_final.py` | `model/final_model.py` |
 | 전처리·QC | `prepro`, `add_frequency.py`, `csd.py`, `csd_full_snr.py`, `qc2.py`, `erp_check.py`, `fetch_events.py`, `extract_pstream.py` | 유지 (npz2는 동료 전처리 산출물) |
 | 누수 감사 | `leak.py`, `confound_audit.py`, `loto.py`, `syllable_audit.py`, `cvvc_diagnose.py`, `decode_confound.py`, `tms_confirm.py` | `hier.py --split token/time`, `final_model.py --study perm` |
-| Type I 기질 | `eval_type1.py`, `type1_*.py`, `evolve_*.py`, `eval_embodied.py`, `ea_voltage_place.py` | 없음 (9절에서 종결) |
 | 속도 | `fastlda*.py`, `fastriem.py`, `jax_pipeline.py`, `run_jax.py`, `verify_*.py`, `bench.py`, `tprof.py` | 유지 (검증 유틸) |
 
 ## 삭제됨
@@ -82,6 +80,15 @@
 같은 역할의 `verify_lda.py`가 남아 있고 git 이력에도 있다.
 
 `__pycache__/`, `._npz2` (macOS AppleDouble)도 삭제.
+
+**Type I 기질 시험 (`attic/type1/`, .py 4개 + .npy 22MB)** — 별개의 개인 연구이므로 이 저장소에서
+제거했다. git 이력에 남아 있다.
+
+**리저버 계보 (`attic/reservoir/`, 9개)** 와 `sdcore`의 `montage_W` / `reservoir`, `onemodel.py`의
+`res_lap`/`res_rand` arm — 쓰지 않으므로 제거했다. 측정 기록은 남긴다: 두피 라플라시안 W가
+동일 조건 랜덤 W를 +0.024로 이겼지만(15/15, p<1e-4) 지연 임베딩에 보태지 못했다
+(`res_lap+one_KT` 0.217 vs `one_KT` 0.236, p<1e-4). 이득의 출처가 재귀 동역학이 아니라 공간
+구조였고, 공간 구조를 쓰는 더 직접적인 방법이 이미 있다.
 
 `.bak/`에 리팩터 전 11개 스크립트 원본이 있다. 세션의 새 파일은 git이 추적하지 않으므로
 이것이 유일한 리팩터 전 사본이다. 리팩터는 함수 36개 `max|diff| = 0`과 로그 숫자 5종 정확

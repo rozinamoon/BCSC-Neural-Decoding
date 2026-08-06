@@ -5,8 +5,6 @@ figs/
 results_eeg/
 *.npz
 *.npy
-!attic/type1/pstream.npy
-!attic/type1/gstream_s1.npy
 *.log
 .venv/
 __pycache__/
