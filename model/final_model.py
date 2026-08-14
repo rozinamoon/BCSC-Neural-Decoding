@@ -28,9 +28,15 @@ STAGE 2  BASE MODEL -- one SPD object per trial, space and time interacting insi
     kept because: at matched row count, dct_low beats time-shuffled rows (-0.054), iid rows
     (-0.066) and high-frequency rows (-0.101), all p<1e-4, and also beats having no rows at
     all (-0.052). The gain is time structure at the right timescale, not dimensions.
-    removed: the scalp-Laplacian reservoir (beats a matched random reservoir by +0.024,
-    15/15 folds, but adds nothing to the delay embedding: -0.019, p<1e-4) and the
-    band-concatenation of two representations (an ensemble, not a design).
+    removed: the scalp-Laplacian reservoir and the band-concatenation of two representations
+    (an ensemble, not a design). The reservoir case is two claims of unequal strength. Solid:
+    it beats a matched random reservoir by +0.0235, 15/15 folds, 95% CI [+0.015, +0.032], so
+    putting geometry into a recurrent operator does work. Weak: it does not add to the delay
+    embedding -- but the often-quoted -0.019 is the hier2 readout column, and under the
+    per-subject readout this model actually uses the gap is -0.003 (pooled +0.001). It was
+    also measured at a single setting (rho=0.90, leak=0.30, gain=1.00, tanh) on a different
+    front-end (basis=pca d=14 lo=20), while the delay embedding got a tau sweep, so the search
+    is asymmetric. What is established is "adding it does not help here", not "it is worse".
 
 STAGE 3  READOUT -- tangent-space Gaussian with a personal decision rule
     kept because: EEGNet with a frozen shared trunk and a per-subject refitted head beats

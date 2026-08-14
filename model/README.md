@@ -75,6 +75,8 @@ band_blocks  밴드당 지연증강 접선 + 창4 공분산 접선 + 창4 평균
 `final_model.py` | ② 메인 모델 + `--study perm/split/den/adapt/readout` |
 `best_concat.py` | ③ 최고 성능 + `--study split/perm/readout` |
 `holdout.py` | 세 모델을 **한 번도 만지지 않은 최종 test셋**(시행 20%, seed 12345)에서 비교. 선택 편향 측정 |
+`spdnet.py` | **통제 실험.** 같은 리만 기하 안에서 설계 vs 학습 (SPDNet BiMap/ReEig/LogEig). 모델이 아니라 "표현을 **학습**하면 이기는가"를 재는 실험이다. `--selftest`가 torch 구현을 `sdcore`와 원소 단위로 대조한다 |
+`reservoir.py` | **통제 실험.** 역전파 없는 연결주의 — 랜덤 고정 재귀 연산자 + 동일 판독. "표현이 **창발**하면 이기는가". ρ·leak·비선형성·N 27셀 스윕. `designed`가 항등 리저버라 `--selftest`가 `max\|R−X\|=0`을 확인한다 |
 
 ## 실행
 
