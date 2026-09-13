@@ -29,3 +29,4 @@ The analysis workflow is divided into three main components:
 
 1. **`preprocessing_matlab/`** — MATLAB/EEGLAB-based preprocessing of raw EEG recordings
 2. **`analysis/`** — Python-based quality control, EEG analysis, and visualization of the preprocessed data
+3. **`model/`** — Machine learning models for phoneme/speech classification and model evaluation
