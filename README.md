@@ -24,6 +24,15 @@ source .venv/bin/activate   # Mac/Linux
 python -m pip install -r requirements.txt
 ```
 
+
+## Dataset
+
+EEG data were obtained from the OpenNeuro dataset  
+https://openneuro.org/datasets/ds006104/versions/1.0.0.
+
+The EEGLAB-formatted EEG recordings under `derivatives/eeglab/sub-XXX/` were used as the input data for preprocessing and analysis.
+
+
 ## Repository structure
 The analysis workflow is divided into three main components:
 
