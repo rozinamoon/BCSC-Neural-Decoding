@@ -23,3 +23,9 @@ source .venv/bin/activate   # Mac/Linux
 ```bash
 python -m pip install -r requirements.txt
 ```
+
+## Repository structure
+The analysis workflow is divided into three main components:
+
+1. **`preprocessing_matlab/`** — MATLAB/EEGLAB-based preprocessing of raw EEG recordings
+2. **`analysis/`** — Python-based quality control, EEG analysis, and visualization of the preprocessed data
